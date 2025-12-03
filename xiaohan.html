@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>正在访问</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body, html {
+            height: 100%;
+            overflow: hidden;
+            font-family: "Microsoft YaHei", "Heiti SC", Arial, sans-serif;
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+        }
+
+        .loading {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            background: rgba(255, 255, 255, 0.9);
+            z-index: 100;
+            transition: opacity 0.3s ease;
+        }
+        .loading .icon {
+            width: 36px;
+            height: 36px;
+            border: 3px solid #e0e0e0;
+            border-top-color: #2c85e6;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-bottom: 16px;
+        }
+        .loading .text {
+            color: #444;
+            font-size: 18px;
+            letter-spacing: 1px;
+        }
+
+        .backup-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: none;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 0 20px;
+            background: rgba(255, 255, 255, 0.9);
+            z-index: 90;
+        }
+        .backup-title {
+            font-size: 22px;
+            color: #333;
+            margin-bottom: 12px;
+            text-align: center;
+            font-weight: 500;
+        }
+        .backup-desc {
+            font-size: 16px;
+            color: #666;
+            margin-bottom: 20px;
+            text-align: center;
+            line-height: 1.8;
+        }
+
+        .unauthorized, .no-param {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            background: #fff;
+            z-index: 200;
+            padding: 0 20px;
+        }
+        .unauthorized-text, .no-param-text {
+            font-size: 24px;
+            color: #e53935;
+            text-align: center;
+            font-weight: bold;
+            letter-spacing: 2px;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            padding: 20px;
+            border: 2px dashed #e53935;
+            border-radius: 12px;
+            background: rgba(229, 57, 53, 0.05);
+        }
+        .no-param-text {
+            color: #2c85e6;
+            border-color: #2c85e6;
+            background: rgba(44, 133, 230, 0.05);
+        }
+
+        iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+            display: none;
+            z-index: 10;
+            position: relative;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        @media (max-width: 375px) {
+            .loading .icon {
+                width: 30px;
+                height: 30px;
+            }
+            .loading .text {
+                font-size: 16px;
+            }
+            .unauthorized-text, .no-param-text {
+                font-size: 20px;
+                padding: 15px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="loading" id="loading">
+        <div class="icon"></div>
+        <div class="text">正在处理链接...</div>
+    </div>
+
+    <div class="backup-container" id="backupContainer">
+        <div class="backup-title">正在直开链接</div>
+        <div class="backup-desc" id="backupDesc">页面加载中，请稍候...</div>
+    </div>
+
+    <div class="unauthorized" id="unauthorized" style="display: none;">
+        <div class="unauthorized-text">老傻子想偷我接口 找你爹来买</div>
+    </div>
+
+    <div class="no-param" id="noParam" style="display: none;">
+        <div class="no-param-text">TG@xiaohan7723</div>
+    </div>
+
+    <iframe id="embeddedPage" src=""></iframe>
+
+    <script>
+        // @xiaohan7723开发
+        const loading = document.getElementById('loading');
+        const backupContainer = document.getElementById('backupContainer');
+        const backupDesc = document.getElementById('backupDesc');
+        const unauthorized = document.getElementById('unauthorized');
+        const noParam = document.getElementById('noParam');
+        const iframe = document.getElementById('embeddedPage');
+        let targetUrl = '';
+        const ALLOWED_DOMAINS = [
+            "shanghaihuanian678.icu",
+            "域名",
+            "域名" // 请替换为实际白名单域名（无需加www）
+        ];
+
+        // @xiaohan7723开发
+        function log(msg) {
+            console.log('[访问日志]', msg);
+        }
+
+        // @xiaohan7723开发
+        function getQueryParam(param) {
+            const value = new URLSearchParams(window.location.search).get(param);
+            return value ? value.trim() : null;
+        }
+
+        // @xiaohan7723开发
+        function decodeBase64Url(encoded) {
+            try {
+                if (!encoded) return null;
+                encoded = encoded.replace(/-/g, '+').replace(/_/g, '/');
+                while (encoded.length % 4 !== 0) encoded += '=';
+                const decoded = atob(encoded);
+                return decodeURIComponent(escape(decoded));
+            } catch (err) {
+                log('解码失败：' + err.message);
+                return null;
+            }
+        }
+
+        // @xiaohan7723开发 - 修复：简化域名验证逻辑，支持子域名和带www的域名
+        function isAllowed(url) {
+            try {
+                const urlObj = new URL(url);
+                if (!['http:', 'https:'].includes(urlObj.protocol)) return false;
+                let domain = urlObj.hostname;
+                // 移除域名前的www.（如果有）
+                domain = domain.replace(/^www\./, '');
+                // 验证：域名完全匹配 或 子域名匹配（如a.qtv7klc6.cn 匹配 qtv7klc6.cn）
+                return ALLOWED_DOMAINS.some(allowed => 
+                    domain === allowed || domain.endsWith('.' + allowed)
+                );
+            } catch (err) {
+                log('域名验证失败：' + err.message);
+                return false;
+            }
+        }
+
+        // @xiaohan7723开发 - 修复：去掉跳转逻辑，仅在iframe中显示（不跳转）
+        function directOpen(url) {
+            log('执行直开模式，在iframe中显示：' + url);
+            iframe.src = url; // 仅更新iframe地址，不跳转
+            iframe.style.display = 'block';
+        }
+
+        // @xiaohan7723开发 - 优化：失败后直接强制开启，跳过过渡提示
+        function showBackup(msg = '') {
+            loading.style.opacity = 0;
+            setTimeout(() => {
+                loading.style.display = 'none';
+                backupContainer.style.display = 'none'; // 隐藏过渡提示
+                if (targetUrl) {
+                    directOpen(targetUrl); // 直接强制在iframe中加载
+                }
+            }, 300);
+        }
+
+        // @xiaohan7723开发
+        function showUnauthorized() {
+            loading.style.opacity = 0;
+            setTimeout(() => {
+                loading.style.display = 'none';
+                unauthorized.style.display = 'flex';
+            }, 300);
+        }
+
+        // @xiaohan7723开发
+        function showNoParam() {
+            loading.style.opacity = 0;
+            setTimeout(() => {
+                loading.style.display = 'none';
+                noParam.style.display = 'flex';
+            }, 300);
+        }
+
+        // @xiaohan7723开发 - 核心优化：加载失败/超时后直接强制开启
+        try {
+            const encoded = getQueryParam('xiaohan');
+            log('获取到编码参数：' + encoded);
+
+            if (!encoded) {
+                log('错误：无编码参数');
+                showNoParam();
+                throw new Error('无编码参数');
+            }
+
+            const decodedUrl = decodeBase64Url(encoded);
+            log('解码后URL：' + decodedUrl);
+
+            if (!decodedUrl) {
+                log('错误：URL解码失败');
+                showUnauthorized();
+                throw new Error('URL解码失败');
+            }
+
+            if (!isAllowed(decodedUrl)) {
+                log('错误：URL未授权（解码后：' + decodedUrl + '）');
+                showUnauthorized();
+                throw new Error('URL无效或未授权');
+            }
+
+            targetUrl = decodedUrl;
+            log('URL授权通过，准备在iframe中加载：' + targetUrl);
+
+            // 恢复iframe加载逻辑（不跳转，全程在中间页）
+            iframe.src = decodedUrl;
+            loading.style.opacity = 0;
+            setTimeout(() => {
+                loading.style.display = 'none';
+                iframe.style.display = 'block';
+            }, 300);
+
+            const timeout = setTimeout(() => {
+                log('iframe加载超时，强制开启');
+                showBackup(); // 超时后直接强制加载
+            }, 5000);
+
+            iframe.onload = () => {
+                clearTimeout(timeout);
+                log('iframe加载成功，保持在中间页');
+            };
+
+            iframe.onerror = () => {
+                clearTimeout(timeout);
+                log('iframe加载错误，强制开启');
+                showBackup(); // 失败后直接强制加载
+            };
+
+        } catch (err) {
+            log('主逻辑出错：' + err.message);
+        }
+    </script>
+</body>
+</html>
